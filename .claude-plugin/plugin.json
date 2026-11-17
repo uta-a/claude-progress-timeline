@@ -1,6 +1,6 @@
 {
   "name": "progress-timeline",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "プロジェクトの進捗をタイムライン、プログレスバー、タスクツリーで右側のペインに表示する",
   "types": "./types/index.d.ts",
   "author": {
