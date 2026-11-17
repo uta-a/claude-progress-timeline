@@ -239,8 +239,8 @@ export const register: Register = on => {
     const page = flags.page >= 0 && flags.page < lists.length ? flags.page : latest
     const list = lists[page]
 
-    // ── プログレスバー: 細い罫線（─）で描き、完了した分だけ色を付ける。
-    // 端末は文字数で長さを決める。他の画面は幅を割合で分け、長い罫線をはみ出させて切る
+    // ── プログレスバー: 細い線で描き、完了した分だけ色を付ける。
+    // 端末は罫線（─）の文字数で長さを決める。他の画面は幅を割合で分けて枠線で引く
     // （アプリ標準の Progress は太さを指定できないため使わない）。
     const LINE = '─'
     const bar = (ratio: number, color: 'success' | 'suggestion' | 'inactive', size: number) => {
@@ -254,23 +254,13 @@ export const register: Register = on => {
           </Box>
         )
       }
+      // 端末以外: 高さ 0 の Box の枠線で線を引く（上辺と下辺が重なって細い 1 本になる）。
+      // 罫線の文字列は overflow で切れずに折り返すので使わない。
       // width の割合は整数で渡す（42.857…% のような小数は Pane が木ごと拒否し、何も描かれない）。
       return (
-        <Box flexDirection="row" width="100%" height={1} overflow="hidden">
-          {r > 0 && (
-            <Box width={`${Math.round(r * 100)}%`} flexShrink={0} height={1} overflow="hidden">
-              <Text color={color} size="caption">
-                {LINE.repeat(400)}
-              </Text>
-            </Box>
-          )}
-          {r < 1 && (
-            <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
-              <Text dimColor size="caption">
-                {LINE.repeat(400)}
-              </Text>
-            </Box>
-          )}
+        <Box flexDirection="row" width="100%" gap={0}>
+          {r > 0 && <Box width={`${Math.round(r * 100)}%`} height={0} borderStyle="single" borderColor={color} />}
+          {r < 1 && <Box flexGrow={1} height={0} borderStyle="single" borderColor="subtle" />}
         </Box>
       )
     }
