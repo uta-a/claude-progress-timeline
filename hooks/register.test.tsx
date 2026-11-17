@@ -165,16 +165,30 @@ test('グループの見出しに完了数のバーを付ける', async ($, on) 
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
 
-  // デスクトップの Progress はテストでは名前と件数の Text とバーの Box に展開される。
   const desktop = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await desktop.find({ type: 'Text', text: /^準備 ✓ 1\/1$/ }))?.text).toBe('準備 ✓ 1/1')
-  expect((await desktop.find({ type: 'Text', text: /^実装 0\/1$/ }))?.text).toBe('実装 0/1')
+  expect((await desktop.find({ type: 'Text', text: /^✓ 1\/1$/ }))?.text).toBe('✓ 1/1')
+  expect((await desktop.find({ type: 'Text', text: /^0\/1$/ }))?.text).toBe('0/1')
   await desktop.unmount()
 
   const terminal = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await terminal.find({ type: 'Text', text: /^✓ 1\/1$/ }))?.text).toBe('✓ 1/1')
   expect((await terminal.find({ type: 'Text', text: /^0\/1$/ }))?.text).toBe('0/1')
   await terminal.unmount()
+})
+
+test('デスクトップのバーは細い罫線を割合の幅で切って描く', async ($, on) => {
+  mock.store(on, { 'project:/proj': SEEDED })
+  on('command.register', () => ({ value: { command: 'progress' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const boxes = await ui.findAll({ type: 'Box' })
+  expect(boxes.some(b => b.props.width === '50%' && b.props.overflow === 'hidden')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /━/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^完了したタスク 1 \/ 2$/ }))?.text).toBe('完了したタスク 1 / 2')
+  await ui.unmount()
 })
 
 test('端末のプロンプト上（inline・狭い幅）では詰めた表示にする', async ($, on) => {
@@ -190,7 +204,10 @@ test('端末のプロンプト上（inline・狭い幅）では詰めた表示�
     surface: 'terminal',
   })
   expect((await ui.find({ type: 'Text', text: /^ツリー$/ }))?.text).toBe('ツリー')
-  expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.text.length).toBe(10)
+  // バーは細い罫線。完了した分（先頭の色付きの線）は 10 セル。
+  const filled = await ui.find({ type: 'Text', text: /^─+$/ })
+  expect(filled?.text.length).toBe(10)
+  expect(filled?.props.color).toBe('suggestion')
   expect((await ui.find({ type: 'Text', text: /^▷ 続行$/ }))?.text).toBe('▷ 続行')
   await ui.unmount()
 })

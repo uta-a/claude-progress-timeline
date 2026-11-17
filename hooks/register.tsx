@@ -222,8 +222,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Progress } = $.ui.resolve(e)
-    // 文字数で長さを決めるバーは等幅の端末だけで使い、他はアプリ標準の Progress にする。
+    const { Box, Text, Button } = $.ui.resolve(e)
     const isTerminal = e.surface === 'terminal'
     const data = await read($, project)
     const flags = await read($, view)
@@ -240,15 +239,41 @@ export const register: Register = on => {
     const page = flags.page >= 0 && flags.page < lists.length ? flags.page : latest
     const list = lists[page]
 
-    const meter = (ratio: number, phase: Phase, size: number, label: string, valueText: string) =>
-      isTerminal ? (
-        <Box flexDirection="row" flexShrink={0}>
-          <Text color={PHASE[phase].color}>{'━'.repeat(Math.round(Math.min(1, ratio) * size))}</Text>
-          <Text dimColor>{'─'.repeat(size - Math.round(Math.min(1, ratio) * size))}</Text>
+    // ── プログレスバー: 細い罫線（─）で描き、完了した分だけ色を付ける。
+    // 端末は文字数で長さを決める。他の画面は幅を割合で分け、長い罫線をはみ出させて切る
+    // （アプリ標準の Progress は太さを指定できないため使わない）。
+    const LINE = '─'
+    const bar = (ratio: number, color: 'success' | 'suggestion' | 'inactive', size: number) => {
+      const r = Math.max(0, Math.min(1, ratio))
+      if (isTerminal) {
+        const filled = Math.round(r * size)
+        return (
+          <Box flexDirection="row" flexShrink={0}>
+            <Text color={color}>{LINE.repeat(filled)}</Text>
+            <Text dimColor>{LINE.repeat(size - filled)}</Text>
+          </Box>
+        )
+      }
+      return (
+        <Box flexDirection="row" width="100%" height={1} overflow="hidden">
+          {r > 0 && (
+            <Box width={`${r * 100}%`} flexShrink={0} height={1} overflow="hidden">
+              <Text color={color} size="caption">
+                {LINE.repeat(400)}
+              </Text>
+            </Box>
+          )}
+          {r < 1 && (
+            <Box flexGrow={1} flexShrink={1} height={1} overflow="hidden">
+              <Text dimColor size="caption">
+                {LINE.repeat(400)}
+              </Text>
+            </Box>
+          )}
         </Box>
-      ) : (
-        <Progress label={label} value={ratio} valueText={valueText} color={PHASE[phase].color} />
       )
+    }
+    const meter = (ratio: number, phase: Phase, size: number) => bar(ratio, PHASE[phase].color, size)
 
     const currentLine = (task: Task | undefined) =>
       task && (
@@ -276,7 +301,7 @@ export const register: Register = on => {
             </Text>
             <Text dimColor size="caption" tabular>{`${c.done} / ${c.total}`}</Text>
           </Box>
-          {meter(ratioOf(list.tasks), phaseOf(list.tasks), 16, '完了したタスク', `${c.done} / ${c.total}`)}
+          {meter(ratioOf(list.tasks), phaseOf(list.tasks), 16)}
           {currentLine(list.tasks.find(t => t.status === 'in_progress'))}
         </Box>
       )
@@ -445,7 +470,8 @@ export const register: Register = on => {
             <Text dimColor size="caption">{`経過 ${elapsed(now - (list.startedAt ?? list.updatedAt))}`}</Text>
           </Box>
         </Box>
-        {meter(ratio, phase, Math.max(8, width - 6), '完了したタスク', `${c.done} / ${c.total}`)}
+        {!isTerminal && <Text dimColor size="caption" tabular>{`完了したタスク ${c.done} / ${c.total}`}</Text>}
+        {meter(ratio, phase, Math.max(8, width - 6))}
         {currentLine(current)}
         {phase !== 'completed' && (
           <Box flexDirection="row" justifyContent="flex-end">
@@ -489,41 +515,29 @@ export const register: Register = on => {
       const ph = phaseOf(tasks)
       const r = ratioOf(tasks)
       const chevron = <Text dimColor>{open ? '▾ ' : '▸ '}</Text>
-      // 端末: ▾ 名前 ━━━━──── ✓ 1/3 を 1 行に並べる（バーは文字数で長さを決める）。
-      // それ以外: ▾ とアプリ標準の Progress（名前と件数がラベル、その下にバー）。
-      const heading = isTerminal ? (
-        <Box flexDirection="row" gap={1} alignItems="center">
-          <Box flexGrow={1} flexShrink={1}>
-            <Button key={key} plain onPress={toggleNode(key)}>
-              {chevron}
-              <Text dimColor={ph === 'completed'} bold={ph === 'in_progress'} wrap="truncate-end">
-                {group}
-              </Text>
-            </Button>
-          </Box>
-          <Box flexShrink={0} flexDirection="row" gap={1}>
-            <Box flexDirection="row">
-              <Text color={groupColor(ph)}>{'━'.repeat(Math.round(Math.min(1, r) * groupBar))}</Text>
-              <Text dimColor>{'─'.repeat(groupBar - Math.round(Math.min(1, r) * groupBar))}</Text>
+      // 見出し: ▾ 名前 … ✓ 1/3。端末はその間にバーを挟んで 1 行にし、他の画面は見出しの下にバーを引く。
+      const heading = (
+        <Box flexDirection="column" gap="xs">
+          <Box flexDirection="row" gap={1} alignItems="center">
+            <Box flexGrow={1} flexShrink={1}>
+              <Button key={key} plain onPress={toggleNode(key)}>
+                {chevron}
+                <Text
+                  dimColor={ph === 'completed'}
+                  weight={ph === 'in_progress' ? 'semibold' : 'regular'}
+                  bold={isTerminal && ph === 'in_progress'}
+                  wrap="truncate-end"
+                >
+                  {group}
+                </Text>
+              </Button>
             </Box>
-            <Text dimColor>{`${ph === 'completed' ? '✓ ' : ''}${g.done}/${g.total}`}</Text>
+            <Box flexShrink={0} flexDirection="row" gap={1}>
+              {isTerminal && bar(r, groupColor(ph), groupBar)}
+              <Text dimColor size="caption" tabular>{`${ph === 'completed' ? '✓ ' : ''}${g.done}/${g.total}`}</Text>
+            </Box>
           </Box>
-        </Box>
-      ) : (
-        <Box flexDirection="row" gap={1} alignItems="flex-start">
-          <Box flexShrink={0}>
-            <Button key={key} plain onPress={toggleNode(key)}>
-              {chevron}
-            </Button>
-          </Box>
-          <Box flexGrow={1} flexShrink={1}>
-            <Progress
-              label={group}
-              value={r}
-              valueText={`${ph === 'completed' ? '✓ ' : ''}${g.done}/${g.total}`}
-              color={groupColor(ph)}
-            />
-          </Box>
+          {!isTerminal && <Box paddingLeft={2}>{bar(r, groupColor(ph), 0)}</Box>}
         </Box>
       )
       return (
@@ -603,7 +617,7 @@ export const register: Register = on => {
                 </Text>
               </Box>
               <Box flexDirection="row" flexShrink={0}>
-                <Text color={PHASE[phase].color}>{'━'.repeat(filled)}</Text>
+                <Text color={PHASE[phase].color}>{LINE.repeat(filled)}</Text>
                 <Text dimColor>{'─'.repeat(barSize - filled)}</Text>
               </Box>
               <Box flexShrink={0}>
