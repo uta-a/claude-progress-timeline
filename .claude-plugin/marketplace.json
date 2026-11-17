@@ -1,0 +1,5 @@
+{
+  "name": "claude-timeline",
+  "owner": { "name": "uta-a" },
+  "plugins": [{ "name": "progress-timeline", "source": "./" }]
+}
