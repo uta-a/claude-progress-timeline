@@ -240,9 +240,10 @@ export const register: Register = on => {
     const list = lists[page]
 
     // ── プログレスバー: 細い線で描き、完了した分だけ色を付ける。
-    // 端末は罫線（─）の文字数で長さを決める。他の画面は幅を割合で分けて枠線で引く
+    // 端末は罫線（─）の文字数で長さを決める。他の画面は幅を割合で分けて下線で引く
     // （アプリ標準の Progress は太さを指定できないため使わない）。
     const LINE = '─'
+    const NBSP = '\u00a0'
     const bar = (ratio: number, color: 'success' | 'suggestion' | 'inactive', size: number) => {
       const r = Math.max(0, Math.min(1, ratio))
       if (isTerminal) {
@@ -254,13 +255,27 @@ export const register: Register = on => {
           </Box>
         )
       }
-      // 端末以外: 高さ 0 の Box の枠線で線を引く（上辺と下辺が重なって細い 1 本になる）。
-      // 罫線の文字列は overflow で切れずに折り返すので使わない。
+      // 端末以外: 改行しない空白（NBSP）に下線を引き、割合の幅の箱で切る。細い 1 本の線になる。
+      // wrap を指定すると切れ目に「…」が付き、罫線の文字は折り返し、枠線や背景色の Box は
+      // 太い枠になるか何も描かれないので、どれも使わない。
       // width の割合は整数で渡す（42.857…% のような小数は Pane が木ごと拒否し、何も描かれない）。
+      const line = (props: { color?: typeof color; dimColor?: boolean }) => (
+        <Text {...props} underline>
+          {NBSP.repeat(400)}
+        </Text>
+      )
       return (
         <Box flexDirection="row" width="100%" gap={0}>
-          {r > 0 && <Box width={`${Math.round(r * 100)}%`} height={0} borderStyle="single" borderColor={color} />}
-          {r < 1 && <Box flexGrow={1} height={0} borderStyle="single" borderColor="subtle" />}
+          {r > 0 && (
+            <Box width={`${Math.round(r * 100)}%`} flexShrink={0} overflow="hidden">
+              {line({ color })}
+            </Box>
+          )}
+          {r < 1 && (
+            <Box flexGrow={1} flexShrink={1} overflow="hidden">
+              {line({ dimColor: true })}
+            </Box>
+          )}
         </Box>
       )
     }

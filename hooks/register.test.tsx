@@ -176,7 +176,7 @@ test('グループの見出しに完了数のバーを付ける', async ($, on) 
   await terminal.unmount()
 })
 
-test('デスクトップのバーは割合の幅の枠線で細く描く', async ($, on) => {
+test('デスクトップのバーは割合の幅で切った下線で細く描く', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
   on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -185,9 +185,12 @@ test('デスクトップのバーは割合の幅の枠線で細く描く', async
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const boxes = await ui.findAll({ type: 'Box' })
-  const filled = boxes.find(b => b.props.width === '50%')
-  expect(filled?.props.height).toBe(0)
-  expect(filled?.props.borderColor).toBe('suggestion')
+  expect(boxes.find(b => b.props.width === '50%')?.props.overflow).toBe('hidden')
+  // 改行しない空白に下線。wrap を付けると切れ目に「…」が出るので付けない。
+  const lines = await ui.findAll({ type: 'Text', text: /^\u00a0+$/ })
+  expect(lines[0]?.props.underline).toBe(true)
+  expect(lines[0]?.props.color).toBe('suggestion')
+  expect(lines.every(l => l.props.wrap === undefined)).toBe(true)
   // 罫線の文字は使わない（デスクトップでは折り返して何段にも重なる）。
   expect(await ui.find({ type: 'Text', text: /[━─]/ })).toBeUndefined()
   expect((await ui.find({ type: 'Text', text: /^完了したタスク 1 \/ 2$/ }))?.text).toBe('完了したタスク 1 / 2')
