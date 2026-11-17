@@ -73,6 +73,30 @@ test('編集は続けて行うと 1 行に束ね、git commit を拾う', async 
   expect(p.timeline.map(e => e.text)).toEqual(['編集: x.ts, y.ts', 'コミット: feat: 追加'])
 })
 
+test('heredoc で渡したコミットメッセージの 1 行目を拾い、同じコマンドの push も記録する', async () => {
+  const viaSubst = `git add a.ts && git commit -m "$(cat <<'EOF'
+feat: 置換で渡す
+
+本文
+EOF
+)" && git push`
+  const viaFile = `git commit -q -F - <<'EOF'
+fix: 標準入力で渡す
+EOF
+sed -i '' 's/a/b/' x && git commit -F - <<"MSG"
+
+chore: 2 つ目
+MSG`
+  let p = applyToolUse(emptyProject(), use('Bash', { command: viaSubst }), AT)
+  p = applyToolUse(p, use('Bash', { command: viaFile }), AT + 1000)
+  expect(p.timeline.map(e => e.text)).toEqual([
+    'コミット: feat: 置換で渡す',
+    'push',
+    'コミット: fix: 標準入力で渡す',
+    'コミット: chore: 2 つ目',
+  ])
+})
+
 const SEEDED: Project = applyToolUse(
   emptyProject(),
   use(TODOS, {

@@ -139,6 +139,27 @@ const planEntry = (at: number, tasks: Task[]): Entry => entry(at, 'plan', `計�
 const isNewPlan = (before: Task[], after: Task[]): boolean =>
   before.length !== after.length || before.some((task, i) => task.content !== after[i]?.content)
 
+const GIT_COMMIT = /\bgit\s+(?:-C\s+\S+\s+)?commit\b/g
+const GIT_PUSH = /\bgit\s+(?:-C\s+\S+\s+)?push\b/
+/** ヒアドキュメント（<<'EOF' … EOF）の本文。<<- と引用符の有無を問わない。 */
+const HEREDOC = /<<-?\s*(['"]?)(\w+)\1[^\n]*\n([\s\S]*?)\n\s*\2\b/
+
+/**
+ * コマンド中の git commit ごとに、メッセージの空でない最初の行を返す。
+ * -m "$(cat <<'EOF' … EOF)" と -F - <<'EOF' … EOF のヒアドキュメントを先に見て、
+ * なければ -m の引数を使う。読めないコミットは空文字列。
+ */
+export const commitMessages = (command: string): string[] => {
+  const starts = [...command.matchAll(GIT_COMMIT)].map(m => m.index ?? 0)
+  return starts.map((start, i) => {
+    const segment = command.slice(start, starts[i + 1] ?? command.length)
+    const heredoc = HEREDOC.exec(segment)
+    const message = /-m\s+(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(segment)
+    const body = heredoc?.[3] ?? (message ? (message[1] ?? message[2] ?? message[3] ?? '') : '')
+    return body.split('\n').find(line => line.trim() !== '')?.trim() ?? ''
+  })
+}
+
 /** モデルの tool_use 1 件をプロジェクトに反映する。対象外のツールはそのまま返す。 */
 export const applyToolUse = (
   project: Project,
@@ -186,13 +207,12 @@ export const applyToolUse = (
   }
   if (name === 'Bash') {
     const command = asString(input.command) ?? ''
-    if (/\bgit\s+(?:-C\s+\S+\s+)?commit\b/.test(command)) {
-      const message = /-m\s+(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(command)
-      const text = message ? (message[1] ?? message[2] ?? message[3] ?? '') : ''
-      return { ...project, timeline: addEntry(project.timeline, entry(at, 'commit', `コミット: ${oneLine(text.split('\n')[0] ?? '') || '(メッセージ不明)'}`)) }
-    }
-    if (/\bgit\s+(?:-C\s+\S+\s+)?push\b/.test(command)) {
-      return { ...project, timeline: addEntry(project.timeline, entry(at, 'push', 'push')) }
+    const entries: Entry[] = commitMessages(command).map(text =>
+      entry(at, 'commit', `コミット: ${oneLine(text) || '(メッセージ不明)'}`),
+    )
+    if (GIT_PUSH.test(command)) entries.push(entry(at, 'push', 'push'))
+    if (entries.length > 0) {
+      return { ...project, timeline: entries.reduce((timeline, one) => addEntry(timeline, one), project.timeline) }
     }
   }
   return project
