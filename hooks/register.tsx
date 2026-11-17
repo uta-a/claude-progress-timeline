@@ -87,7 +87,20 @@ const promptTextOf = (content: unknown): string =>
     .map(b => b.text as string)
     .join('\n')
 
-const openPane = ($: Dollar) => $.ui.open({ id: PANE, title: TITLE })
+/**
+ * 端末でプロンプトの上に出るときの高さ（既定は画面の 3 分の 1）を、
+ * 中身に合わせて求める。横に並ぶとき（dock）は幅だけを求める。
+ */
+const openPane = async ($: Dollar) => {
+  const data = await read($, project)
+  const list = data.lists.reduce<Project['lists'][number] | undefined>(
+    (best, l) => (best === undefined || l.updatedAt > best.updatedAt ? l : best),
+    undefined,
+  )
+  const groups = new Set(list?.tasks.map(t => t.group).filter(g => g !== undefined)).size
+  const rows = Math.min(24, Math.max(8, 6 + (list?.tasks.length ?? 0) + groups))
+  return $.ui.open({ id: PANE, title: TITLE, rows, columns: 44 })
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -180,8 +193,13 @@ export const register: Register = on => {
     const data = await read($, project)
     const flags = await read($, view)
     const now = Date.now()
-    const width = Math.max(24, e.props.bodyColumns)
+    const width = Math.max(20, e.props.bodyColumns)
     const lists = data.lists
+    // 端末は 1 行が貴重なので余白を行数で詰める。プロンプトの上（inline）はさらに詰める。
+    const inline = e.props.placement === 'inline'
+    const narrow = width < 36
+    const rowGap = isTerminal ? 0 : 'sm'
+    const sectionGap = isTerminal ? (inline ? 0 : 1) : 'lg'
 
     const latest = lists.reduce((best, list, i) => (list.updatedAt > (lists[best]?.updatedAt ?? -1) ? i : best), 0)
     const page = flags.page >= 0 && flags.page < lists.length ? flags.page : latest
@@ -251,7 +269,7 @@ export const register: Register = on => {
     }
     const header = (
       <Box flexDirection="row" gap={2}>
-        {tabButton('tree', '1', 'タスクツリー')}
+        {tabButton('tree', '1', narrow ? 'ツリー' : 'タスクツリー')}
         {tabButton('report', '2', 'レポート', data.timeline.length)}
       </Box>
     )
@@ -301,7 +319,7 @@ export const register: Register = on => {
         else days.push({ label, items: [item] })
       }
       return days.map(day => (
-        <Box flexDirection="column" gap="sm">
+        <Box flexDirection="column" gap={rowGap}>
           <Box flexDirection="row" justifyContent="space-between">
             <Text bold size="footnote">
               {day.label}
@@ -316,7 +334,7 @@ export const register: Register = on => {
     if (flags.tab === 'report') {
       const shown = data.timeline.slice(-MAX_SHOWN).reverse()
       return (
-        <Box flexDirection="column" gap="lg">
+        <Box flexDirection="column" gap={sectionGap}>
           {header}
           {shown.length === 0 && <Text dimColor>まだ記録がありません。</Text>}
           {timelineByDay(shown)}
@@ -329,7 +347,7 @@ export const register: Register = on => {
 
     if (list === undefined) {
       return (
-        <Box flexDirection="column" gap="lg">
+        <Box flexDirection="column" gap={sectionGap}>
           {header}
           <Text dimColor>タスクリストはまだありません。Claude がタスクリストを作るとここに表示されます。</Text>
         </Box>
@@ -430,7 +448,7 @@ export const register: Register = on => {
       const g = countOf(tasks)
       const ph = phaseOf(tasks)
       return (
-        <Box flexDirection="column" gap="sm">
+        <Box flexDirection="column" gap={rowGap}>
           <Box flexDirection="row" gap={1} alignItems="center">
             <Box flexGrow={1} flexShrink={1}>
               <Button key={key} plain onPress={toggleNode(key)}>
@@ -449,16 +467,16 @@ export const register: Register = on => {
               <Text dimColor size="caption" tabular>{`${g.done}/${g.total}`}</Text>
             </Box>
           </Box>
-          {open && <Box flexDirection="column" gap="sm">{tasks.map(t => taskRow(t, 2))}</Box>}
+          {open && <Box flexDirection="column" gap={rowGap}>{tasks.map(t => taskRow(t, 2))}</Box>}
         </Box>
       )
     }
 
     const tree = (
-      <Box flexDirection="column" gap="sm">
+      <Box flexDirection="column" gap={rowGap}>
         {groupTasks(list.tasks).map(slot =>
           slot.group === undefined ? (
-            <Box flexDirection="column" gap="sm">{slot.tasks.map(t => taskRow(t, 0))}</Box>
+            <Box flexDirection="column" gap={rowGap}>{slot.tasks.map(t => taskRow(t, 0))}</Box>
           ) : (
             groupBlock(slot.group, slot.tasks)
           ),
@@ -470,22 +488,93 @@ export const register: Register = on => {
     const recent = data.timeline.slice(-5).reverse()
     const newest = recent[0]
     const recentSection = (
-      <Box flexDirection="column" gap="sm">
-        <Button key="recent" plain onPress={setView(v => ({ ...v, recentOpen: !v.recentOpen }))}>
-          <Text dimColor>{flags.recentOpen ? '▾ ' : '▸ '}</Text>
-          <Text bold dimColor size="caption">
-            最近の動き
-          </Text>
+      <Box flexDirection="column" gap={rowGap}>
+        <Box flexDirection="row" gap={1}>
+          <Box flexShrink={0}>
+            <Button key="recent" plain onPress={setView(v => ({ ...v, recentOpen: !v.recentOpen }))}>
+              <Text dimColor>{flags.recentOpen ? '▾ ' : '▸ '}</Text>
+              <Text bold dimColor size="caption">
+                最近の動き
+              </Text>
+            </Button>
+          </Box>
           {!flags.recentOpen && newest !== undefined && (
-            <Text dimColor size="caption">{` · ${clock(newest.at, now)} ${newest.text}`}</Text>
+            <Box flexShrink={1}>
+              <Text dimColor size="caption" wrap="truncate-end">{`${clock(newest.at, now)} ${newest.text}`}</Text>
+            </Box>
           )}
-        </Button>
-        {flags.recentOpen && <Box flexDirection="column" gap="sm">{recent.map(timelineRow)}</Box>}
+        </Box>
+        {flags.recentOpen && <Box flexDirection="column" gap={rowGap}>{recent.map(timelineRow)}</Box>}
       </Box>
     )
 
+    if (isTerminal) {
+      // 端末: 枠を使わず、割合・バー・件数を 1 行、進行中のタスクと経過・続行を 1 行にまとめる。
+      const pct = percent(ratio)
+      const cnt = `${c.done}/${c.total}`
+      const barSize = Math.max(4, width - pct.length - cnt.length - 2)
+      const filled = Math.round(Math.min(1, ratio) * barSize)
+      return (
+        <Box flexDirection="column" gap={sectionGap}>
+          {header}
+          <Box flexDirection="column">
+            <Text bold wrap="truncate-end">
+              {list.name ?? list.title}
+            </Text>
+            {multi && (
+              <Box flexDirection="row" gap={1}>
+                <Button key="prev" plain onPress={go(-1)}>
+                  <Text dimColor>‹</Text>
+                </Button>
+                <Box flexShrink={1}>
+                  <Text dimColor wrap="truncate-end">{`${list.title} ${page + 1}/${lists.length}`}</Text>
+                </Box>
+                <Button key="next" plain onPress={go(1)}>
+                  <Text dimColor>›</Text>
+                </Button>
+              </Box>
+            )}
+            <Box flexDirection="row" gap={1}>
+              <Box flexShrink={0}>
+                <Text bold color={phase === 'completed' ? 'success' : undefined}>
+                  {pct}
+                </Text>
+              </Box>
+              <Box flexDirection="row" flexShrink={0}>
+                <Text color={PHASE[phase].color}>{'━'.repeat(filled)}</Text>
+                <Text dimColor>{'─'.repeat(barSize - filled)}</Text>
+              </Box>
+              <Box flexShrink={0}>
+                <Text dimColor>{cnt}</Text>
+              </Box>
+            </Box>
+            <Box flexDirection="row" gap={1} justifyContent="space-between">
+              <Box flexDirection="row" gap={1} flexShrink={1}>
+                <Box flexShrink={0}>
+                  <Text color={PHASE[phase].color}>{PHASE[phase].mark}</Text>
+                </Box>
+                <Box flexShrink={1}>
+                  <Text wrap="truncate-end">{current?.content ?? PHASE[phase].label}</Text>
+                </Box>
+              </Box>
+              <Box flexDirection="row" gap={1} flexShrink={0}>
+                {!narrow && <Text dimColor>{elapsed(now - (list.startedAt ?? list.updatedAt))}</Text>}
+                {phase !== 'completed' && (
+                  <Button key="continue" plain onPress={() => void $.prompt.submit({ text: '残りのタスクを続けてください。' })}>
+                    <Text color="claude">▷ 続行</Text>
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          </Box>
+          {tree}
+          {recentSection}
+        </Box>
+      )
+    }
+
     return (
-      <Box flexDirection="column" gap="lg">
+      <Box flexDirection="column" gap={sectionGap}>
         {header}
         {carousel}
         {card}

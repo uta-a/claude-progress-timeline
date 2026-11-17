@@ -109,11 +109,29 @@ test('タスクツリー: 進捗カードとグループ・タスクの行を描
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Text', text: /^実装する$/ }))?.text).toBe('実装する')
-    if (surface === 'terminal') expect((await ui.find({ type: 'Text', text: /件のタスクが完了/ }))?.text).toBe('1/2 件のタスクが完了')
+    if (surface === 'terminal') expect((await ui.find({ type: 'Text', text: /^1\/2$/ }))?.text).toBe('1/2')
+    else expect((await ui.find({ type: 'Text', text: /^◐ 進行中$/ }))?.text).toBe('◐ 進行中')
     expect((await ui.find({ type: 'Text', text: /^50%$/ }))?.text).toBe('50%')
-    expect((await ui.find({ type: 'Text', text: /^◐ 進行中$/ }))?.text).toBe('◐ 進行中')
     await ui.unmount()
   }
+})
+
+test('端末のプロンプト上（inline・狭い幅）では詰めた表示にする', async ($, on) => {
+  mock.store(on, { 'project:/proj': SEEDED })
+  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+
+  const ui = await $.ui.mount({
+    ...PANE,
+    props: { ...PANE.props, placement: 'inline', bodyColumns: 28, scroll: { offset: 0, bodyRows: 10 } },
+    surface: 'terminal',
+  })
+  expect((await ui.find({ type: 'Text', text: /^ツリー$/ }))?.text).toBe('ツリー')
+  expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.text.length).toBe(10)
+  expect((await ui.find({ type: 'Text', text: /^▷ 続行$/ }))?.text).toBe('▷ 続行')
+  await ui.unmount()
 })
 
 test('レポートタブにタイムラインを描く', async ($, on) => {
