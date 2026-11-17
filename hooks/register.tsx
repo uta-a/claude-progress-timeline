@@ -254,10 +254,11 @@ export const register: Register = on => {
           </Box>
         )
       }
+      // width の割合は整数で渡す（42.857…% のような小数は Pane が木ごと拒否し、何も描かれない）。
       return (
         <Box flexDirection="row" width="100%" height={1} overflow="hidden">
           {r > 0 && (
-            <Box width={`${r * 100}%`} flexShrink={0} height={1} overflow="hidden">
+            <Box width={`${Math.round(r * 100)}%`} flexShrink={0} height={1} overflow="hidden">
               <Text color={color} size="caption">
                 {LINE.repeat(400)}
               </Text>

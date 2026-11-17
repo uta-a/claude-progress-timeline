@@ -191,6 +191,31 @@ test('デスクトップのバーは細い罫線を割合の幅で切って描�
   await ui.unmount()
 })
 
+test('割り切れない割合（3/7）でもデスクトップで描ける', async ($, on) => {
+  const seventh = applyToolUse(
+    emptyProject(),
+    use(PLAN, {
+      items: ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((content, i) => ({
+        content,
+        status: i < 3 ? 'completed' : i === 3 ? 'in_progress' : 'pending',
+      })),
+    }),
+    AT,
+  )
+  mock.store(on, { 'project:/proj': seventh })
+  on('command.register', () => ({ value: { command: 'progress' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
+
+  for (const placement of ['dock', 'widget'] as const) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, placement }, surface: 'desktop' })
+    expect((await ui.find({ type: 'Text', text: /^D$/ }))?.text).toBe('D')
+    expect((await ui.findAll({ type: 'Box' })).some(b => b.props.width === '43%')).toBe(true)
+    await ui.unmount()
+  }
+})
+
 test('端末のプロンプト上（inline・狭い幅）では詰めた表示にする', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
   on('command.register', () => ({ value: { command: 'progress' } }))
