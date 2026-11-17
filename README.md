@@ -55,5 +55,5 @@ claude plugin install progress-timeline --marketplace uta-a/claude-progress-time
 
 ## コマンド
 
-- `/timeline`: ペインを開く
-- `/timeline clear`: このプロジェクトの記録を消す
+- `/progress`: ペインを開き、最新のタスクリストの割合・完了数・状態・経過時間、プログレスバー、タスクツリーを会話に表示する
+- `/progress clear`: このプロジェクトの記録を消す

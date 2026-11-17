@@ -100,7 +100,7 @@ const PANE = {
 
 test('タスクツリー: 進捗カードとグループ・タスクの行を描く（全 surface）', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
-  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
 
@@ -118,7 +118,7 @@ test('タスクツリー: 進捗カードとグループ・タスクの行を描
 
 test('端末のプロンプト上（inline・狭い幅）では詰めた表示にする', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
-  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
@@ -136,7 +136,7 @@ test('端末のプロンプト上（inline・狭い幅）では詰めた表示�
 
 test('レポートタブにタイムラインを描く', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
-  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
@@ -153,7 +153,7 @@ test('レポートタブにタイムラインを描く', async ($, on) => {
 
 test('ツリーのノードを押すと折りたたむ', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
-  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
@@ -170,7 +170,7 @@ test('ツリーのノードを押すと折りたたむ', async ($, on) => {
 
 test('widget では進捗だけを描く', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
-  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
@@ -182,7 +182,7 @@ test('widget では進捗だけを描く', async ($, on) => {
 })
 
 const start = async ($: Engine, on: On) => {
-  on('command.register', () => ({ value: { command: 'timeline' } }))
+  on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
@@ -236,4 +236,33 @@ test('session.append: 依頼文は system-reminder を除いて記録する', as
   expect((await ui.find({ type: 'Text', text: /ペインを作って/ }))?.text).toBe('ペインを作って')
   expect(await ui.find({ type: 'Text', text: /system-reminder/ })).toBeUndefined()
   await ui.unmount()
+})
+
+const runProgress = ($: Engine) =>
+  $.command.run({
+    command: 'progress',
+    args: '',
+    origin: { kind: 'composer' },
+    presentation: { isFullscreen: false, columns: 80 },
+  })
+
+test('/progress: ペインを開き、割合・件数・進行中のタスクを返す', async ($, on) => {
+  mock.store(on, { 'project:/proj': SEEDED })
+  await start($, on)
+  const result = await runProgress($)
+  const lines = (result.text ?? '').split('\n')
+  // 幅 80 列ではバーは 30 セル。
+  expect(lines).toContain(`${'━'.repeat(15)}${'─'.repeat(15)} 50%  1/2 件完了`)
+  expect(lines.some(l => /^◐ 進行中 · 経過 /.test(l))).toBe(true)
+  expect(lines).toContain('▾ 準備  1/1 ✓')
+  expect(lines).toContain('  ● 設計')
+  expect(lines).toContain('▾ 実装  0/1')
+  expect(lines).toContain('  ◐ 実装する')
+})
+
+test('/progress: リストが無いときはその旨を返す', async ($, on) => {
+  mock.store(on)
+  await start($, on)
+  const result = await runProgress($)
+  expect(result.text).toContain('タスクリストはまだありません')
 })

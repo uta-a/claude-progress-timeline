@@ -102,6 +102,40 @@ const openPane = async ($: Dollar) => {
   return $.ui.open({ id: PANE, title: TITLE, rows, columns: 44 })
 }
 
+/**
+ * `/progress` の応答: 最新のリストの見出し、割合・件数・状態・経過時間、
+ * プログレスバー、タスクツリー（グループは完了数つき）。columns は端末の幅。
+ */
+const summaryOf = (data: Project, now: number, columns: number): string => {
+  const list = data.lists.reduce<Project['lists'][number] | undefined>(
+    (best, l) => (best === undefined || l.updatedAt > best.updatedAt ? l : best),
+    undefined,
+  )
+  if (list === undefined) return 'タスクリストはまだありません。Claude がタスクリストを作ると進捗を表示します。'
+  const c = countOf(list.tasks)
+  const ratio = ratioOf(list.tasks)
+  const phase = phaseOf(list.tasks)
+  const size = Math.max(10, Math.min(30, columns - 16))
+  const filled = Math.round(Math.min(1, ratio) * size)
+  const lines = [
+    `${list.name ?? list.title}`,
+    `${'━'.repeat(filled)}${'─'.repeat(size - filled)} ${percent(ratio)}  ${c.done}/${c.total} 件完了`,
+    `${PHASE[phase].mark} ${PHASE[phase].label} · 経過 ${elapsed(now - (list.startedAt ?? list.updatedAt))}`,
+    '',
+  ]
+  const taskLine = (task: Task, indent: string) => `${indent}${PHASE[task.status].mark} ${task.content}`
+  for (const slot of groupTasks(list.tasks)) {
+    if (slot.group === undefined) {
+      lines.push(...slot.tasks.map(t => taskLine(t, '')))
+      continue
+    }
+    const g = countOf(slot.tasks)
+    lines.push(`▾ ${slot.group}  ${g.done}/${g.total}${phaseOf(slot.tasks) === 'completed' ? ' ✓' : ''}`)
+    lines.push(...slot.tasks.map(t => taskLine(t, '  ')))
+  }
+  return lines.join('\n')
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
@@ -119,8 +153,8 @@ export const register: Register = on => {
     }
 
     await $.command.register({
-      name: 'timeline',
-      description: '進捗ペイン（タイムライン・プログレスバー・タスクツリー）を開く。`clear` で記録を消す',
+      name: 'progress',
+      description: '進捗ペインを開き、いまの進み具合を表示する。`clear` で記録を消す',
       argumentHint: '[clear]',
     })
     // 経過時間を 1 分ごとに描き直す（再読み込みでタイマーは作り直される）。
@@ -129,13 +163,14 @@ export const register: Register = on => {
     return result
   })
 
-  on('command.run', { command: 'timeline' }, async ($, e) => {
+  on('command.run', { command: 'progress' }, async ($, e) => {
     if (typeof e.args === 'string' && e.args.trim() === 'clear') {
       await change($, () => emptyProject())
       return { text: 'このプロジェクトの進捗記録を消しました。' }
     }
     const opened = await openPane($)
-    return { text: opened.isPlaced ? '進捗ペインを開きました。' : `進捗ペインを開けませんでした: ${opened.reason}` }
+    const summary = summaryOf(await read($, project), Date.now(), e.presentation.columns)
+    return { text: opened.isPlaced ? summary : `${summary}\n進捗ペインを開けませんでした: ${opened.reason}` }
   })
 
   // 会話に積まれる行を観測するだけ。行そのものは変えない。
