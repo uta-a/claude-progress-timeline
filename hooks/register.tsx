@@ -283,6 +283,7 @@ export const register: Register = on => {
     }
 
     const setView = (fn: (v: ViewFlags) => ViewFlags) => () => update($, view, fn)
+    const groupBar = narrow ? 5 : 10
     const isOpen = (key: string) => !flags.collapsed.includes(key)
     const toggleNode = (key: string) =>
       setView(v => ({
@@ -479,31 +480,55 @@ export const register: Register = on => {
       )
     }
 
+    // グループの見出しにも完了数のバーを付ける。完了したグループは緑を使わず灰色。
+    const groupColor = (ph: Phase) => (ph === 'completed' ? 'inactive' : PHASE[ph].color)
     const groupBlock = (group: string, tasks: Task[]) => {
       const key = `group:${list.source}:${group}`
       const open = isOpen(key)
       const g = countOf(tasks)
       const ph = phaseOf(tasks)
+      const r = ratioOf(tasks)
+      const chevron = <Text dimColor>{open ? '▾ ' : '▸ '}</Text>
+      // 端末: ▾ 名前 ━━━━──── ✓ 1/3 を 1 行に並べる（バーは文字数で長さを決める）。
+      // それ以外: ▾ とアプリ標準の Progress（名前と件数がラベル、その下にバー）。
+      const heading = isTerminal ? (
+        <Box flexDirection="row" gap={1} alignItems="center">
+          <Box flexGrow={1} flexShrink={1}>
+            <Button key={key} plain onPress={toggleNode(key)}>
+              {chevron}
+              <Text dimColor={ph === 'completed'} bold={ph === 'in_progress'} wrap="truncate-end">
+                {group}
+              </Text>
+            </Button>
+          </Box>
+          <Box flexShrink={0} flexDirection="row" gap={1}>
+            <Box flexDirection="row">
+              <Text color={groupColor(ph)}>{'━'.repeat(Math.round(Math.min(1, r) * groupBar))}</Text>
+              <Text dimColor>{'─'.repeat(groupBar - Math.round(Math.min(1, r) * groupBar))}</Text>
+            </Box>
+            <Text dimColor>{`${ph === 'completed' ? '✓ ' : ''}${g.done}/${g.total}`}</Text>
+          </Box>
+        </Box>
+      ) : (
+        <Box flexDirection="row" gap={1} alignItems="flex-start">
+          <Box flexShrink={0}>
+            <Button key={key} plain onPress={toggleNode(key)}>
+              {chevron}
+            </Button>
+          </Box>
+          <Box flexGrow={1} flexShrink={1}>
+            <Progress
+              label={group}
+              value={r}
+              valueText={`${ph === 'completed' ? '✓ ' : ''}${g.done}/${g.total}`}
+              color={groupColor(ph)}
+            />
+          </Box>
+        </Box>
+      )
       return (
         <Box flexDirection="column" gap={rowGap}>
-          <Box flexDirection="row" gap={1} alignItems="center">
-            <Box flexGrow={1} flexShrink={1}>
-              <Button key={key} plain onPress={toggleNode(key)}>
-                <Text dimColor>{open ? '▾ ' : '▸ '}</Text>
-                <Text
-                  dimColor={ph === 'completed'}
-                  weight={ph === 'in_progress' ? 'semibold' : 'regular'}
-                  bold={isTerminal && ph === 'in_progress'}
-                >
-                  {group}
-                </Text>
-              </Button>
-            </Box>
-            <Box flexShrink={0} flexDirection="row">
-              {ph === 'completed' && <Text color="inactive">✓ </Text>}
-              <Text dimColor size="caption" tabular>{`${g.done}/${g.total}`}</Text>
-            </Box>
-          </Box>
+          {heading}
           {open && <Box flexDirection="column" gap={rowGap}>{tasks.map(t => taskRow(t, 2))}</Box>}
         </Box>
       )
