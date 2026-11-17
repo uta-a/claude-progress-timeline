@@ -7,16 +7,16 @@ Claude Code（デスクトップアプリの Code タブ、ターミナル）の
 ターミナルの Claude Code のプロンプトで:
 
 ```
-/plugin install progress-timeline --marketplace uta-a/claude-timeline
+/plugin install progress-timeline --marketplace uta-a/claude-progress-timeline
 ```
 
 `Add marketplace?` には `y` で答え、スコープを選びます。シェルからは次のとおりです。
 
 ```bash
-claude plugin install progress-timeline --marketplace uta-a/claude-timeline
+claude plugin install progress-timeline --marketplace uta-a/claude-progress-timeline
 ```
 
-デスクトップアプリでは、プロンプト欄の横の + から Plugins を開き、Add marketplace に `uta-a/claude-timeline` を入れてから Add plugin で追加します。
+デスクトップアプリでは、プロンプト欄の横の + から Plugins を開き、Add marketplace に `uta-a/claude-progress-timeline` を入れてから Add plugin で追加します。
 
 ## 表示するもの
 
