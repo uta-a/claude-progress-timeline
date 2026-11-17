@@ -20,7 +20,7 @@ import {
 } from './model'
 
 const PANE = 'timeline'
-const TITLE = 'タイムライン'
+const TITLE = '進捗'
 
 // 色は 1 色 1 義: suggestion = 進行中、success = 完了、claude = 選択中のタブ、inactive = 補助。
 const PHASE: Record<Phase, { label: string; mark: string; color: 'success' | 'suggestion' | 'inactive' }> = {
