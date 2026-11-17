@@ -166,8 +166,8 @@ test('グループの見出しに完了数のバーを付ける', async ($, on) 
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
 
   const desktop = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await desktop.find({ type: 'Text', text: /^✓ 1\/1$/ }))?.text).toBe('✓ 1/1')
-  expect((await desktop.find({ type: 'Text', text: /^0\/1$/ }))?.text).toBe('0/1')
+  expect((await desktop.find({ type: 'Text', text: /^準備 ✓ 1\/1$/ }))?.text).toBe('準備 ✓ 1/1')
+  expect((await desktop.find({ type: 'Text', text: /^実装 0\/1$/ }))?.text).toBe('実装 0/1')
   await desktop.unmount()
 
   const terminal = await $.ui.mount({ ...PANE, surface: 'terminal' })
@@ -176,24 +176,17 @@ test('グループの見出しに完了数のバーを付ける', async ($, on) 
   await terminal.unmount()
 })
 
-test('デスクトップのバーは割合の幅で切った下線で細く描く', async ($, on) => {
+test('デスクトップのバーはアプリ標準の Progress で描く', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
   on('command.register', () => ({ value: { command: 'progress' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
 
+  // テストでは Progress はラベルと件数の Text とバーの Box に展開される。
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  const boxes = await ui.findAll({ type: 'Box' })
-  expect(boxes.find(b => b.props.width === '50%')?.props.overflow).toBe('hidden')
-  // 改行しない空白に下線。wrap を付けると切れ目に「…」が出るので付けない。
-  const lines = await ui.findAll({ type: 'Text', text: /^\u00a0+$/ })
-  expect(lines[0]?.props.underline).toBe(true)
-  expect(lines[0]?.props.color).toBe('suggestion')
-  expect(lines.every(l => l.props.wrap === undefined)).toBe(true)
-  // 罫線の文字は使わない（デスクトップでは折り返して何段にも重なる）。
-  expect(await ui.find({ type: 'Text', text: /[━─]/ })).toBeUndefined()
   expect((await ui.find({ type: 'Text', text: /^完了したタスク 1 \/ 2$/ }))?.text).toBe('完了したタスク 1 / 2')
+  expect(await ui.find({ type: 'Text', text: /[━─]/ })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -217,7 +210,6 @@ test('割り切れない割合（3/7）でもデスクトップで描ける', as
   for (const placement of ['dock', 'widget'] as const) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, placement }, surface: 'desktop' })
     expect((await ui.find({ type: 'Text', text: /^D$/ }))?.text).toBe('D')
-    expect((await ui.findAll({ type: 'Box' })).some(b => b.props.width === '43%')).toBe(true)
     await ui.unmount()
   }
 })
@@ -235,10 +227,8 @@ test('端末のプロンプト上（inline・狭い幅）では詰めた表示�
     surface: 'terminal',
   })
   expect((await ui.find({ type: 'Text', text: /^ツリー$/ }))?.text).toBe('ツリー')
-  // バーは細い罫線。完了した分（先頭の色付きの線）は 10 セル。
-  const filled = await ui.find({ type: 'Text', text: /^─+$/ })
-  expect(filled?.text.length).toBe(10)
-  expect(filled?.props.color).toBe('suggestion')
+  // 完了した分は太線 ━ で 10 セル。
+  expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.text.length).toBe(10)
   expect((await ui.find({ type: 'Text', text: /^▷ 続行$/ }))?.text).toBe('▷ 続行')
   await ui.unmount()
 })
