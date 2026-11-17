@@ -116,6 +116,24 @@ test('タスクツリー: 進捗カードとグループ・タスクの行を描
   }
 })
 
+test('完了したタスクは緑を使わず灰色の打ち消し線で描く', async ($, on) => {
+  mock.store(on, { 'project:/proj': SEEDED })
+  on('command.register', () => ({ value: { command: 'progress' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/proj', surface: 'desktop', isInteractive: true })
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    const done = await ui.find({ type: 'Text', text: /^設計$/ })
+    expect(done?.props.strikethrough).toBe(true)
+    expect(done?.props.color).toBe('inactive')
+    expect((await ui.find({ type: 'Text', text: /^●$/ }))?.props.color).toBe('inactive')
+    expect((await ui.find({ type: 'Text', text: /^実装する$/ }))?.props.strikethrough).not.toBe(true)
+    await ui.unmount()
+  }
+})
+
 test('端末のプロンプト上（inline・狭い幅）では詰めた表示にする', async ($, on) => {
   mock.store(on, { 'project:/proj': SEEDED })
   on('command.register', () => ({ value: { command: 'progress' } }))

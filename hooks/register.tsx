@@ -456,19 +456,21 @@ export const register: Register = on => {
       </Box>
     )
 
-    // ── タスクの行: 印 / 見出し（状態は印と文字の強さで示す）
+    // ── タスクの行: 印 / 見出し（状態は印と文字の強さで示す。完了は緑を使わず灰色の打ち消し線）
     const taskRow = (task: Task, indent: number) => {
       const p = PHASE[task.status]
+      const done = task.status === 'completed'
       return (
         <Box flexDirection="row" gap={1} paddingLeft={indent}>
           <Box flexShrink={0}>
-            <Text color={p.color}>{p.mark}</Text>
+            <Text color={done ? 'inactive' : p.color}>{p.mark}</Text>
           </Box>
           <Box flexGrow={1} flexShrink={1}>
             <Text
               weight={task.status === 'in_progress' ? 'semibold' : 'regular'}
               bold={isTerminal && task.status === 'in_progress'}
-              dimColor={task.status === 'completed'}
+              color={done ? 'inactive' : undefined}
+              strikethrough={done}
             >
               {task.content}
             </Text>
@@ -498,7 +500,7 @@ export const register: Register = on => {
               </Button>
             </Box>
             <Box flexShrink={0} flexDirection="row">
-              {ph === 'completed' && <Text color="success">✓ </Text>}
+              {ph === 'completed' && <Text color="inactive">✓ </Text>}
               <Text dimColor size="caption" tabular>{`${g.done}/${g.total}`}</Text>
             </Box>
           </Box>
